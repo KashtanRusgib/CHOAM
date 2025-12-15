@@ -1,0 +1,37 @@
+name: Unit and Integration Test Suite
+
+# Run on push and on pull requests targeting the main branch
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci_test:
+    # The job name must match the Ruleset check name exactly.
+    name: ci/test 
+    runs-on: ubuntu-latest
+    
+    # Configure matrix testing across Node.js versions 18, 20, and 22.
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install Dependencies
+      run: npm ci
+
+    - name: Run Test Suite and Coverage Check
+      run: npm run test:ci
