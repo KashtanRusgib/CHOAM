@@ -1,77 +1,140 @@
-// ===============================================================
-// RHOAM CORE ENTRY POINT: index.js
-// Responsible for initializing the Hierarchical Observer system.
-// ===============================================================
+const fs = require('fs');
+const path = require('path');
+const EventEmitter = require('events');
+const Logger = require('./utils/logger');
 
-/**
- * @class HierarchicalObserver
- * @description The core supervisory class responsible for managing 
- * multi-agent chat interactions, enforcing the system's architecture
- * rules, and maintaining the overall state of the multi-agent session.
- * This class acts as the 'R' (Recursive) and 'H' (Hierarchical) component
- * of the RHOAM system.
- */
-class HierarchicalObserver {
+const RULES_PATH = path.join(__dirname, 'config', 'rules.json');
+
+class HierarchicalObserver extends EventEmitter {
     constructor(config = {}) {
-        // Configuration for the observer, potentially including:
-        // - Agent list
-        // - Rule set reference
-        // - Logging configuration
+        super();
         this.config = config;
+        this.id = config.id || 'ROOT_OBSERVER';
+        this.agents = new Map();
+        this.rules = [];
         this.isRunning = false;
-        console.log("Hierarchical Observer initialized.");
+        this.loadRules();
+        Logger.success("Hierarchical Observer initialized.");
     }
 
-    /**
-     * @method start
-     * @description Starts the observer, connecting it to the chat environment
-     * and beginning the monitoring process.
-     */
+    loadRules() {
+        try {
+            if (fs.existsSync(RULES_PATH)) {
+                const data = fs.readFileSync(RULES_PATH, 'utf8');
+                this.rules = JSON.parse(data);
+                Logger.success(`Loaded ${this.rules.length} rules from configuration.`);
+            } else {
+                Logger.warn("Rules configuration file not found. Defaulting to empty.");
+            }
+        } catch (error) {
+            Logger.error(`Failed to load rules: ${error.message}`);
+        }
+    }
+
     start() {
         if (this.isRunning) {
-            console.log("Observer is already running.");
+            Logger.log("Observer is already running.");
             return;
         }
-        console.log("Starting Hierarchical Observer...");
+        Logger.log("Starting Hierarchical Observer...");
         this.isRunning = true;
-        // Logic for connecting to the chat and setting up event listeners will go here.
-        // For now, we confirm startup.
-        console.log("Observer is now actively monitoring the environment.");
+        Logger.success("Observer is now actively monitoring the environment.");
     }
 
-    /**
-     * @method stop
-     * @description Gracefully stops the observer.
-     */
     stop() {
         if (!this.isRunning) {
-            console.log("Observer is already stopped.");
+            Logger.log("Observer is already stopped.");
             return;
         }
-        console.log("Stopping Hierarchical Observer...");
+        Logger.log("Stopping Hierarchical Observer...");
         this.isRunning = false;
-        // Cleanup logic will go here.
-        console.log("Observer stopped.");
+        Logger.log("Observer stopped.");
     }
 
-    /**
-     * @method enforceRule
-     * @param {string} ruleId - The ID of the rule being enforced.
-     * @param {object} context - The context (e.g., message, agent) violating the rule.
-     * @description Placeholder for the primary rule enforcement logic.
-     */
-    enforceRule(ruleId, context) {
-        console.warn(\`Rule \${ruleId} potentially violated in context: \${JSON.stringify(context)}\`);
-        // Actual enforcement logic (e.g., intervention, logging, warning agent) will be added later.
+    registerAgent(agent) {
+        if (!agent.id) {
+            Logger.warn("Attempted to register agent without ID.");
+            return;
+        }
+        if (this.agents.has(agent.id)) {
+            Logger.warn(`Agent ${agent.id} is already registered.`);
+            return;
+        }
+        this.agents.set(agent.id, agent);
+        Logger.success(`Agent ${agent.id} registered.`);
+
+        // Recursive bubbling check: If agent is an EventEmitter (Sub-Observer), listen to it.
+        if (typeof agent.on === 'function') {
+            Logger.log(`Registered Sub-Observer ${agent.id}. Attaching recursive listeners.`);
+            agent.on('message_approved', (msg) => {
+                // Re-emit (bubble) with context
+                this.emit('message_approved', msg);
+            });
+        }
+    }
+
+    unregisterAgent(agentId) {
+        if (this.agents.delete(agentId)) {
+            Logger.success(`Agent ${agentId} unregistered.`);
+        } else {
+            Logger.warn(`Attempted to unregister non-existent agent ${agentId}.`);
+        }
+    }
+
+    processMessage(message) {
+        if (!this.isRunning) {
+            Logger.error("Observer is not running. Message rejected.");
+            return false;
+        }
+        if (!message || !message.senderId || !message.content) {
+            Logger.error("Invalid message structure.");
+            return false;
+        }
+        if (!this.agents.has(message.senderId)) {
+            Logger.error(`Agent ${message.senderId} not registered.`);
+            return false;
+        }
+
+        Logger.log(`Processing message from ${message.senderId}: ${message.content.substring(0, 50)}...`);
+
+        // Enforce Rules
+        for (const rule of this.rules) {
+            if (!this.enforceRule(rule, message)) {
+                Logger.warn(`Message blocked by rule: ${rule.name}`);
+                return false;
+            }
+        }
+
+        // If we get here, message is valid
+        this.emit('message_approved', message);
+        Logger.success(`Message accepted and broadcast: ${message.content.substring(0, 50)}...`);
+        return true;
+    }
+
+    enforceRule(rule, context) {
+        switch (rule.type) {
+            case 'restriction':
+                if (rule.params && rule.params.limit && context.content.length > rule.params.limit) {
+                    Logger.warn(`Violation: Message exceeds limit of ${rule.params.limit}.`);
+                    return false;
+                }
+                break;
+            case 'censorship':
+                if (rule.params && rule.params.tokens) {
+                    for (const token of rule.params.tokens) {
+                        if (context.content.includes(token)) {
+                            Logger.warn(`Violation: Message contains forbidden token '${token}'.`);
+                            return false;
+                        }
+                    }
+                }
+                break;
+            default:
+                // Unknown rule type, fail open (log warning but allow)
+                Logger.warn(`Unknown rule type: ${rule.type}`);
+        }
+        return true;
     }
 }
 
-// Instantiate and start the observer
-const observer = new HierarchicalObserver({
-    // Initial configuration placeholder
-});
-
-observer.start();
-
-// Export the class for testing and module usage
 module.exports = { HierarchicalObserver };

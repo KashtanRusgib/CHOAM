@@ -1,0 +1,16 @@
+[
+  {
+    "id": "R001",
+    "name": "Brief Communication Standard",
+    "type": "restriction",
+    "description": "Messages must be concise (under 100 characters).",
+    "params": { "limit": 100 }
+  },
+  {
+    "id": "R002",
+    "name": "Protocol Preservation",
+    "type": "censorship",
+    "description": "Unauthorized command overrides are forbidden.",
+    "params": { "tokens": ["OVERRIDE", "SUDO", "DESTROY"] }
+  }
+]

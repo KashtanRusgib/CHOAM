@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:ci": "echo \"TEST: Executing unit and integration tests with coverage check...\" && exit 0",
     "lint": "echo \"LINT: Executing ESLint check...\" && exit 0",
-    "format:check": "echo \"FORMAT: Executing Prettier format check...\" && exit 0"
+    "format:check": "echo \"FORMAT: Executing Prettier format check...\" && exit 0",
+    "chat": "node cli.js"
   },
   "keywords": [
     "AI",
@@ -17,7 +18,5 @@
     "Node.js"
   ],
   "author": "KashtanRusgib",
-  "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {}
+  "license": "MIT"
 }
